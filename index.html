@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>井字棋 · 三档AI</title>
+    <style>
+        *{box-sizing:border-box;margin:0;user-select:none}
+        body{min-height:100vh;background:linear-gradient(145deg,#1e2b3c,#0f1a26);display:flex;justify-content:center;align-items:center;font-family:'Segoe UI',Roboto,sans-serif;padding:16px}
+        .game-container{background:rgba(30,40,55,0.7);backdrop-filter:blur(4px);padding:2rem;border-radius:56px;box-shadow:0 20px 40px rgba(0,0,0,0.6),inset 0 1px 2px rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.03);max-width:520px;width:100%;aspect-ratio:1/1.15;display:flex;flex-direction:column;justify-content:space-between}
+        h1{text-align:center;font-weight:400;letter-spacing:2px;color:#d4e2f0;font-size:1.4rem;margin:0;flex-shrink:0}
+        .board-wrapper{flex:1 1 auto;display:flex;align-items:center;justify-content:center;padding:8px 0}
+        .board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;background:#1f2e3f;padding:14px;border-radius:40px;box-shadow:inset 0 -6px 0 #0b141e,0 12px 28px #00000066;width:100%;aspect-ratio:1/1;max-width:400px}
+        .cell{background:#263b4e;border-radius:28px;box-shadow:inset 0 -6px 0 #0f1c2a,0 0 0 1px #3d566e;display:flex;align-items:center;justify-content:center;font-size:4.4rem;font-weight:500;color:#eaf2fa;cursor:pointer;transition:all .08s;text-shadow:0 4px 6px #00000044;aspect-ratio:1/1;width:100%}
+        .cell:active{transform:scale(0.94);box-shadow:inset 0 -2px 0 #0f1c2a}
+        .cell.X{color:#7fc9ff;text-shadow:0 0 12px #3f9eff88}
+        .cell.O{color:#ffb77c;text-shadow:0 0 12px #ff9f4d88}
+        .status{display:flex;justify-content:space-between;align-items:center;background:#17232fcc;padding:8px 18px 8px 24px;border-radius:60px;border:1px solid #41586e55;flex-shrink:0;margin:4px 0}
+        .turn-indicator{font-size:1rem;color:#c3d7ec}
+        .turn-indicator span{font-weight:600}
+        .restart-btn{background:#2f435a;border:none;color:#dbe8f5;font-size:1.1rem;padding:4px 16px;border-radius:40px;cursor:pointer;font-weight:500;box-shadow:0 4px 0 #0f1a26,0 2px 10px #00000044;border:1px solid #4f6a84;transition:.15s}
+        .restart-btn:active{transform:translateY(4px);box-shadow:0 0 0 #0f1a26}
+        .restart-btn:hover{background:#3b556f;color:#fff}
+        .controls{display:flex;flex-direction:column;gap:6px;flex-shrink:0;margin-top:4px}
+        .choice-area{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+        .choice-btn{background:#24384b;border:none;color:#c5d9ed;font-size:.85rem;padding:6px 16px;border-radius:40px;cursor:pointer;font-weight:500;box-shadow:0 4px 0 #0e1924,0 2px 8px #00000033;border:1px solid #3d5770;transition:.12s;flex:1 1 auto;min-width:70px}
+        .choice-btn.active{background:#3d5b79;color:#fff;box-shadow:0 4px 0 #1d3143;border-color:#7a9bbc}
+        .choice-btn:active{transform:translateY(4px);box-shadow:0 0 0 #0e1924}
+        .choice-btn:hover{background:#34516b;color:#f0f8ff}
+        .diff-group{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+        .diff-btn{background:#1f3140;border:none;color:#a0b9cf;font-size:.75rem;padding:4px 14px;border-radius:30px;cursor:pointer;font-weight:400;box-shadow:0 3px 0 #0b141e;border:1px solid #38506a;transition:.12s}
+        .diff-btn.active{background:#3f5f7a;color:#fff;box-shadow:0 3px 0 #1a2d3f;border-color:#6e92b0}
+        .diff-btn:active{transform:translateY(3px);box-shadow:0 0 0 #0b141e}
+        .footer{color:#6f89a1;font-size:.7rem;text-align:center;opacity:.7;flex-shrink:0;margin-top:2px}
+        @media(max-width:480px){.game-container{padding:1.2rem;aspect-ratio:1/1.1}.cell{font-size:3.6rem}.board{gap:8px;padding:10px}}
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <h1>✖️ 井字棋 · AI</h1>
+    <div class="status">
+        <div class="turn-indicator">⚡ <span id="turnText">你的回合</span></div>
+        <button class="restart-btn" id="restartBtn">↺ 重来</button>
+    </div>
+    <div class="board-wrapper">
+        <div class="board" id="boardContainer"></div>
+    </div>
+    <div class="controls">
+        <div class="choice-area">
+            <button class="choice-btn active" id="firstPlayerBtn">🧑 先手</button>
+            <button class="choice-btn" id="firstAIBtn">🤖 AI 先手</button>
+        </div>
+        <div class="diff-group">
+            <button class="diff-btn active" data-diff="easy">😊 简单</button>
+            <button class="diff-btn" data-diff="medium">🤔 中等</button>
+            <button class="diff-btn" data-diff="hard">🧠 困难</button>
+        </div>
+        <div class="footer">你 · X &nbsp;|&nbsp; AI · O</div>
+    </div>
+</div>
+<script>
+    (function(){
+        // DOM 引用
+        const boardEl=document.getElementById('boardContainer');
+        const turnText=document.getElementById('turnText');
+        const restartBtn=document.getElementById('restartBtn');
+        const firstPlayerBtn=document.getElementById('firstPlayerBtn');
+        const firstAIBtn=document.getElementById('firstAIBtn');
+        const diffBtns=document.querySelectorAll('.diff-btn');
+
+        // 游戏状态
+        let board=Array(9).fill(null);
+        let cur='X';
+        let active=!0;
+        let first='player';
+        let timer=null;
+        let difficulty='easy';
+        let cells=[];
+
+        // 初始化棋盘格子
+        function initCells(){
+            boardEl.innerHTML='';
+            for(let i=0;i<9;i++){
+                const c=document.createElement('div');
+                c.className='cell';
+                c.dataset.index=i;
+                c.addEventListener('click',onClick);
+                boardEl.appendChild(c);
+            }
+            cells=document.querySelectorAll('.cell');
+        }
+        initCells();
+
+        // 渲染棋盘
+        function render(){
+            for(let i=0;i<9;i++){
+                const c=cells[i],v=board[i];
+                c.textContent=v||'';
+                c.classList.remove('X','O');
+                if(v)c.classList.add(v);
+            }
+            if(!active)return;
+            turnText.textContent=cur==='X'?'你的回合 (X)':'AI 思考中 (O) …';
+        }
+
+        // 检查胜负
+        function checkWin(b){
+            const p=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            for(let q of p){
+                const [a,c,d]=q;
+                if(b[a]&&b[a]===b[c]&&b[a]===b[d])return b[a];
+            }
+            return b.every(v=>v!==null)?'tie':null;
+        }
+
+        // 游戏结束
+        function endGame(r){
+            active=!1;
+            turnText.textContent=r==='X'?'🎉 你赢了！':r==='O'?'😵 AI 赢了 ...':'🤝 平局！';
+            return !0;
+        }
+
+        // 玩家点击
+        function onClick(e){
+            if(!active||cur!=='X')return;
+            const i=parseInt(e.currentTarget.dataset.index);
+            if(board[i]!==null)return;
+            move(i,'X');
+        }
+
+        // 执行一步
+        function move(i,p){
+            if(board[i]!==null)return !1;
+            board[i]=p;
+            render();
+            const r=checkWin(board);
+            if(r)return endGame(r);
+            cur=cur==='X'?'O':'X';
+            render();
+            if(active&&cur==='O')scheduleAI();
+            return !0;
+        }
+
+        // ---------- AI 核心 ----------
+        function getAIMove(){
+            const empty=board.reduce((a,v,i)=>v===null?[...a,i]:a,[]);
+            if(!empty.length)return null;
+
+            if(difficulty==='easy'){
+                const player='X';
+                for(let i of empty){
+                    board[i]=player;
+                    if(checkWin(board)==='X'){
+                        board[i]=null;
+                        return i;
+                    }
+                    board[i]=null;
+                }
+                return empty[Math.floor(Math.random()*empty.length)];
+            }
+
+            if(difficulty==='medium'){
+                if(Math.random()<0.45){
+                    return empty[Math.floor(Math.random()*empty.length)];
+                }
+                return getHardMove();
+            }
+            return getHardMove();
+        }
+
+        function getHardMove(){
+            const empty=board.reduce((a,v,i)=>v===null?[...a,i]:a,[]);
+            if(!empty.length)return null;
+
+            function minimax(b,d,isMax){
+                const w=checkWin(b);
+                if(w==='O')return 10-d;
+                if(w==='X')return d-10;
+                if(b.every(v=>v!==null))return 0;
+                if(isMax){
+                    let best=-Infinity;
+                    for(let i=0;i<9;i++){
+                        if(b[i]===null){
+                            b[i]='O';
+                            const s=minimax(b,d+1,!1);
+                            b[i]=null;
+                            best=Math.max(s,best);
+                        }
+                    }
+                    return best;
+                }else{
+                    let best=Infinity;
+                    for(let i=0;i<9;i++){
+                        if(b[i]===null){
+                            b[i]='X';
+                            const s=minimax(b,d+1,!0);
+                            b[i]=null;
+                            best=Math.min(s,best);
+                        }
+                    }
+                    return best;
+                }
+            }
+
+            if(empty.length===1)return empty[0];
+            let bestScore=-Infinity,bestMove=empty[0];
+            for(let idx of empty){
+                board[idx]='O';
+                const score=minimax(board,0,!1);
+                board[idx]=null;
+                if(score>bestScore){bestScore=score;bestMove=idx;}
+            }
+            return bestMove;
+        }
+
+        function scheduleAI(){
+            if(timer)clearTimeout(timer);
+            let delay=200;
+            if(difficulty==='medium') delay=400;
+            else if(difficulty==='hard') delay=600;
+            timer=setTimeout(()=>{
+                if(!active||cur!=='O')return;
+                const idx=getAIMove();
+                if(idx===null){ checkWin(board)&&endGame('tie'); render(); return; }
+                move(idx,'O');
+                timer=null;
+            },delay);
+        }
+
+        // ---------- 重置 ----------
+        function reset(){
+            if(timer){clearTimeout(timer);timer=null;}
+            board=Array(9).fill(null);
+            active=!0;
+            cur=first==='player'?'X':'O';
+            render();
+            turnText.textContent=cur==='X'?'你的回合 (X)':'AI 思考中 (O) …';
+            if(active&&cur==='O')scheduleAI();
+        }
+
+        function setFirst(choice){
+            if(choice===first)return;
+            first=choice;
+            firstPlayerBtn.classList.toggle('active',choice==='player');
+            firstAIBtn.classList.toggle('active',choice==='ai');
+            reset();
+        }
+
+        function setDifficulty(diff){
+            if(diff===difficulty)return;
+            difficulty=diff;
+            diffBtns.forEach(btn=>{
+                btn.classList.toggle('active',btn.dataset.diff===diff);
+            });
+            reset();
+        }
+
+        // ---------- 事件绑定 ----------
+        restartBtn.addEventListener('click',reset);
+        firstPlayerBtn.addEventListener('click',()=>setFirst('player'));
+        firstAIBtn.addEventListener('click',()=>setFirst('ai'));
+        diffBtns.forEach(btn=>{
+            btn.addEventListener('click',()=>setDifficulty(btn.dataset.diff));
+        });
+
+        reset();
+    })();
+</script>
+</body>
+</html>
